@@ -2,9 +2,13 @@ $: << File.expand_path("lib")
 $: << File.expand_path("test")
 
 require "bundler"
-Bundler.setup :default, :test
+Bundler.setup :default, :development, :test
 
 ENV["DATABASE_URL"] ||= "postgres:///queue_classic_test"
+# Rails integration is enabled if ActiveRecord module constant is
+# present, and it will be present after tests that use
+# ActiveRecord. So forcifully disable Rails by default.
+ENV["QC_RAILS_DATABASE"] = "false"
 
 require "queue_classic"
 require "stringio"
@@ -18,6 +22,7 @@ class QCTest < Minitest::Test
 
   def teardown
     QC.delete_all
+    reset_globals
   end
 
   def init_db
@@ -27,6 +32,11 @@ class QCTest < Minitest::Test
     QC::Setup.create(c.connection)
     c.execute(File.read('./test/helper.sql'))
     c.disconnect
+  end
+
+  def reset_globals
+    QC.default_conn_adapter = nil
+    QC.default_queue = nil
   end
 
   def capture_stderr_output
@@ -50,5 +60,17 @@ class QCTest < Minitest::Test
     ENV['DEBUG'] = original_debug
     $stdout = original_stdout
   end
+
+  def with_env(temporary_environment)
+    original_environment = {}
+    temporary_environment.each do |name, value|
+      original_environment[name] = ENV[name]
+      ENV[name] = value
+    end
+    yield
+  ensure
+    original_environment.each { |name, value| ENV[name] = value }
+  end
+
 
 end

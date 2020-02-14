@@ -58,12 +58,17 @@ module QC
 
   def self.default_conn_adapter
     return @conn_adapter if defined?(@conn_adapter) && @conn_adapter
+
     if rails_connection_sharing_enabled?
-      @conn_adapter = ConnAdapter.new(ActiveRecord::Base.connection.raw_connection)
-    else
-      @conn_adapter = ConnAdapter.new
+      # AR connection should never be memoized, as call to
+      # ActiveRecord::Base.clear_active_connections! in current thread
+      # will cause it to return to AR pool, and it will become shared
+      # between memoized value and pool. And Rails does
+      # clear_active_connections! after each request
+      return ConnAdapter.new(ActiveRecord::Base.connection.raw_connection)
     end
-    @conn_adapter
+
+    @conn_adapter = ConnAdapter.new
   end
 
   def self.default_conn_adapter=(conn)
